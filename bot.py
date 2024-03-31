@@ -105,8 +105,14 @@ def load_vector_storage(path_dir, top_k=3):
 )
     
 def remove_stop_words(query: str) -> str:
+    slited_query = query.split()
+    # possible optimization with NLTK here!
     for sw in stopwords:
-        query = query.replace(sw, '')
+        try:
+            slited_query.remove(sw)
+        except ValueError:
+            pass
+    query = " ".join(slited_query)
     logging.info(f'Query without stopwords: {query}')
     return query
 
