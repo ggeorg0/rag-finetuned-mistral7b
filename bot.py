@@ -4,7 +4,7 @@ import os
 import sys
 import logging
 logging.basicConfig(
-    level=logging.WARN,
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     datefmt="%Y-%m-%d %H:%M:%S"
 )
@@ -24,17 +24,17 @@ from peft import PeftModel, PeftConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
-
-TG_TOKEN_PATH = "telegram_token.txt"
-
-
 MODEL_NAME = "TheBloke/Mistral-7B-Instruct-v0.2-GPTQ"
 MODEL_REVISION = "gptq-4bit-32g-actorder_True"
 
 PRETRAINED_LORA = "ggeorge/qlora-mistral-hackatone-yandexq"
 
+TG_TOKEN_PATH = "telegram_token.txt"
+
+# device: 'auto' or 'gpu'
 DEVICE = 'auto'
 
+# your documents directory
 STORAGE = "books"
 
 SYSTEM_PROMPT = "Вы - русскоязычный ИИ ассистент, который помогает пользователям находить файлы, \
@@ -167,8 +167,14 @@ if not token:
     print('Telegram token is empty')
     sys.exit(-1)
 
+logging.info(f'indexing documents in the direcotry: {STORAGE}')
 vector_storage_index = load_vector_storage(STORAGE)
+
+logging.info(f'loading model: {MODEL_NAME} {MODEL_REVISION}')
+logging.info(f'qlora: {PRETRAINED_LORA}')
 model, model_tokenizer = load_model()
+
+logging.info(f'building telegram bot')
 app = ApplicationBuilder().token(token).build()
 
 app.add_handler(CommandHandler("start", start))
@@ -176,5 +182,4 @@ app.add_handler(CommandHandler("help", help_command))
 
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-# Запускаем бота
 app.run_polling()
