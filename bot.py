@@ -152,8 +152,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         prompt = continue_dialog(user_dialogs[chat_id], new_text)
     else:
         prompt = generate_inital_prompt(new_text)
-
-    
     try:
         model_output = query_model(prompt)
         user_dialogs[chat_id] = model_output
@@ -164,15 +162,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         logging.exception(f"cannot generate output, reason:\n")
 
         
-    update.message.reply_text(update.message.text)
-    # # Получаем текст сообщения от пользователя
-    # user_input = update.message.text
-    # # Генерируем ответ от модели на основе введенного пользователем текста
-    # generated_text = text_generation_model(user_input, max_length=50, do_sample=False)[0]['generated_text']
-    # # Отправляем сгенерированный текст пользователю
-    # await update.message.reply_text(generated_text)
-
-
 token = read_telegram_token(TG_TOKEN_PATH)
 if not token:
     print('Telegram token is empty')

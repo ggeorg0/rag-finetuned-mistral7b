@@ -1,2 +1,7 @@
-pytest
 python-telegram-bot
+bitsandbytes
+llama-index
+llama-index-embeddings-huggingface
+peft
+auto-gptq
+optimum
