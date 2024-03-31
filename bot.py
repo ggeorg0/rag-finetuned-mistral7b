@@ -57,7 +57,7 @@ TG_GREET_MESSAGE = """Привет! Я большая языковая моде�
 Просто отправь мне свое сообщение, и я отвечу.
 """
 
-DEFAULT_MAX_TOKENS = 250
+DEFAULT_MAX_TOKENS = 300
 
 # type annotations can be inaccurate here
 model: PeftModel
@@ -101,7 +101,7 @@ def load_vector_storage(path_dir, top_k=3):
     )
     vector_query_engine = RetrieverQueryEngine(
         retriever=retriever,
-        node_postprocessors=[SimilarityPostprocessor(similarity_cutoff=0.7)],
+        node_postprocessors=[SimilarityPostprocessor(similarity_cutoff=0.5)],
 )
     
 def remove_stop_words(query: str) -> str:
@@ -149,9 +149,8 @@ def generate_inital_prompt(user_query):
 def continue_dialog(history, user_query):
     return history + '\n' + INTRUCT_TEMPLATE.format(
         sys_inst='\n',
-        context=knowlage_db_context(user_query,
+        context=knowlage_db_context(user_query),
         message=user_query)
-    )
 
 def query_model(prompt) -> str:
     global model_tokenizer
