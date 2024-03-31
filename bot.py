@@ -1,0 +1,191 @@
+from __future__ import annotations
+
+import os
+import sys
+import logging
+logging.basicConfig(
+    level=logging.WARN,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+
+
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes
+from telegram.ext import filters
+
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.core import Settings, SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.retrievers import VectorIndexRetriever
+from llama_index.core.query_engine import RetrieverQueryEngine
+from llama_index.core.postprocessor import SimilarityPostprocessor
+
+from peft import PeftModel, PeftConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+
+
+TG_TOKEN_PATH = "telegram_token.txt"
+
+
+MODEL_NAME = "TheBloke/Mistral-7B-Instruct-v0.2-GPTQ"
+MODEL_REVISION = "gptq-4bit-32g-actorder_True"
+
+PRETRAINED_LORA = "ggeorge/qlora-mistral-hackatone-yandexq"
+
+DEVICE = 'auto'
+
+STORAGE = "books"
+
+SYSTEM_PROMPT = "Вы - русскоязычный ИИ ассистент, который помогает пользователям находить файлы, \
+отвечать на их вопросы и поддерживать диалог. \
+Вы имеете доступ к базе знаний, которая автоматически покажет результаты поиска, \
+если найдется какая-либо информация. Помните, что не все результаты поиска могут быть релевантны. \
+Адаптируйтесь к запросам пользователей и предоставляйте понятные и полезные ответы на вопросы, \
+поддерживая диалог на русском языке. \
+\n\
+\n\
+"
+
+INTRUCT_TEMPLATE = "[INST]{inst}{context}[/INST]"
+
+TG_GREET_MESSAGE = """Привет! Я большая языковая модель, которая может генерировать текст. 
+В мое основе лежит большая языковыя модель Mistral-7B-Instruct-v0.2 (версия GPTQ). Я дообучена на датасете сервиса Yandex Q с использованием QLoRA.
+Просто отправь мне свое сообщение, и я отвечу.
+"""
+
+DEFAULT_MAX_TOKENS = 180
+
+### TODO
+model: None
+model_tokenizer: AutoTokenizer
+vector_storage_index: VectorStoreIndex
+vector_query_engine: None
+user_dialogs: dict[int, str] = dict()
+
+
+def read_telegram_token(file_path):
+    if os.path.exists(file_path):
+        with open(file_path, 'r') as file:
+            token = file.read().strip()
+    else:
+        token = input("File 'telegram_token.txt' not found. Enter token manually: ").strip()
+    return token
+
+
+def load_vector_storage(path_dir, top_k=3):
+    index = VectorStoreIndex.from_documents(documents)
+    retriever = VectorIndexRetriever(
+        index=index,
+        similarity_top_k=top_k,
+    )
+    vector_query_engine = RetrieverQueryEngine(
+        retriever=retriever,
+        node_postprocessors=[SimilarityPostprocessor(similarity_cutoff=0.7)],
+)
+    
+def remove_stop_words(query: str) -> str:
+    return query
+    # TODO!!!
+
+def knowlage_db_context(query: str) -> str:
+    clear_query = remove_stop_words(query)
+    search_response = vector_query_engine.query(clear_query)
+    if not search_response:
+        return 'В базе знаний ничего не найдено'
+    context = ['Найдено в базе знаний:\n']
+    for node in search_response.source_nodes:
+        context.append( f'\tимя файла: {node.metadata["file_name"]}\n' )
+        context.append( f'\tдата создания: {node.metadata["creation_date"]}\n' )
+        context.append( f'\tтекст: {node.text}' + "\n" )
+
+    return context.join('\n')
+    
+def load_model():
+    model = AutoModelForCausalLM.from_pretrained(
+        MODEL_NAME,
+        device_map=DEVICE,
+        trust_remote_code=False,
+        revision=MODEL_REVISION)
+
+    config = PeftConfig.from_pretrained(PRETRAINED_LORA)
+    model = PeftModel.from_pretrained(model, PRETRAINED_LORA)
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, use_fast=True)
+
+    model.eval()
+    return model, tokenizer
+
+def generate_inital_prompt(user_query):
+    return INTRUCT_TEMPLATE.format(
+        inst=SYSTEM_PROMPT,
+        context=knowlage_db_context(user_query))
+
+def continue_dialog(history, user_query):
+    return INTRUCT_TEMPLATE.format(
+        inst='\n',
+        context=knowlage_db_context(user_query)
+    )
+
+def query_model(prompt) -> str:
+    global model_tokenizer
+    inputs = model_tokenizer(prompt, return_tensors="pt")
+    outputs = model.generate(input_ids=inputs["input_ids"].to("cuda"),
+                             max_new_tokens=DEFAULT_MAX_TOKENS)
+    return model_tokenizer.batch_decode(outputs)[0]
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(TG_GREET_MESSAGE)
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(TG_GREET_MESSAGE)
+
+async def clear_history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    global user_dialogs
+    chat_id = update.effective_chat.id
+    user_dialogs.pop(chat_id)
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    global user_dialogs
+    chat_id = update.effective_chat.id
+    new_text = update.message.text
+    if chat_id in user_dialogs:
+        prompt = continue_dialog(user_dialogs[chat_id], new_text)
+    else:
+        prompt = generate_inital_prompt(new_text)
+
+    
+    try:
+        model_output = query_model(prompt)
+        user_dialogs[chat_id] = model_output
+        last_inst = model_output.rfind('[/INST]')
+        await context.bot.send_message(model_output[last_inst+7:])
+    except Exception as e:
+        await context.bot.send_message('[!] Произошла ошибка, смотрите логи!')
+        logging.exception(f"cannot generate output, reason:\n")
+
+        
+    update.message.reply_text(update.message.text)
+    # # Получаем текст сообщения от пользователя
+    # user_input = update.message.text
+    # # Генерируем ответ от модели на основе введенного пользователем текста
+    # generated_text = text_generation_model(user_input, max_length=50, do_sample=False)[0]['generated_text']
+    # # Отправляем сгенерированный текст пользователю
+    # await update.message.reply_text(generated_text)
+
+
+token = read_telegram_token(TG_TOKEN_PATH)
+if not token:
+    print('Telegram token is empty')
+    sys.exit(-1)
+
+vector_storage_index = load_vector_storage(STORAGE)
+model, model_tokenizer = load_model()
+app = ApplicationBuilder().token(token).build()
+
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("help", help_command))
+
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+# Запускаем бота
+app.run_polling()
