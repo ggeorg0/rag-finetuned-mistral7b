@@ -101,18 +101,19 @@ def load_vector_storage(path_dir, top_k=3):
     )
     vector_query_engine = RetrieverQueryEngine(
         retriever=retriever,
-        node_postprocessors=[SimilarityPostprocessor(similarity_cutoff=0.5)],
+        node_postprocessors=[SimilarityPostprocessor(similarity_cutoff=0.4)],
 )
     
 def remove_stop_words(query: str) -> str:
     for sw in stopwords:
         query = query.replace(sw, '')
+    logging.info(f'Query without stopwords: {query}')
     return query
 
 def knowlage_db_context(query: str) -> str:
     clear_query = remove_stop_words(query)
     search_response = vector_query_engine.query(clear_query)
-    if not search_response.source_nodes:
+    if len(search_response.source_nodes) == 0:
         return 'В базе знаний ничего не найдено'
     context = ['Найдено в базе знаний:\n']
     for node in search_response.source_nodes:
@@ -169,6 +170,7 @@ async def clear_history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     global user_dialogs
     chat_id = update.effective_chat.id
     user_dialogs.pop(chat_id)
+    await context.bot.send_message("история очищена!")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     global user_dialogs
@@ -210,6 +212,7 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("clear", clear_history))
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
