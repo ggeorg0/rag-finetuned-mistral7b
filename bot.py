@@ -176,7 +176,7 @@ async def clear_history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     global user_dialogs
     chat_id = update.effective_chat.id
     user_dialogs.pop(chat_id)
-    await context.bot.send_message("история очищена!")
+    await context.bot.send_message(chat_id, "история очищена!")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     global user_dialogs
