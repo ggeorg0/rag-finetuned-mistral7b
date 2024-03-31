@@ -101,7 +101,7 @@ def load_vector_storage(path_dir, top_k=3):
     )
     vector_query_engine = RetrieverQueryEngine(
         retriever=retriever,
-        node_postprocessors=[SimilarityPostprocessor(similarity_cutoff=0.4)],
+        node_postprocessors=[SimilarityPostprocessor(similarity_cutoff=0.5)],
 )
     
 def remove_stop_words(query: str) -> str:
@@ -121,7 +121,7 @@ def knowlage_db_context(query: str) -> str:
     search_response = vector_query_engine.query(clear_query)
     if len(search_response.source_nodes) == 0:
         return 'В базе знаний ничего не найдено'
-    context = ['Найдено в базе знаний:\n']
+    context = ['Найдено в базе знаний (не все записи могут быть полезны):\n']
     for node in search_response.source_nodes:
         context.append( f'\tимя файла: {node.metadata["file_name"]}\n' )
         context.append( f'\tдата создания: {node.metadata["creation_date"]}\n' )
@@ -191,9 +191,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         logging.info(f'Model output: {model_output}')
         user_dialogs[chat_id] = model_output
         last_inst = model_output.rfind('[/INST]')
+        sentence_end_token = model_output.rfind('</s>')
+        if last_inst > sentence_end_token:
+            answer = model_output[last_inst+7:]
+        else:
+            answer = model_output[last_inst+7:sentence_end_token]
         await context.bot.send_message(chat_id, model_output[last_inst+7:])
     except Exception as e:
-        await context.bot.send_message(chat_id, '[!] Произошла ошибка, смотрите логи!')
+        await context.bot.send_message(chat_id, '[!] Произошла ошибка, смотрите логи!\n'
+                                                'Вероятно длина контекста достигла максимума')
         logging.exception(f"cannot generate output, reason:\n")
 
 
@@ -207,7 +213,7 @@ def main():
     stopwords = load_stopwords(STOPWORDS_DIRECTORY)
 
     logging.info(f'indexing documents in the direcotry: {STORAGE}')
-    vector_storage_index = load_vector_storage(STORAGE, top_k=3)
+    vector_storage_index = load_vector_storage(STORAGE, top_k=2)
 
     logging.info(f'loading model: {MODEL_NAME} {MODEL_REVISION}')
     logging.info(f'qlora: {PRETRAINED_LORA}')
