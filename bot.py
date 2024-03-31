@@ -48,7 +48,7 @@ SYSTEM_PROMPT = "Вы - русскоязычный ИИ ассистент, ко
 \n\
 "
 
-INTRUCT_TEMPLATE = "[INST]{inst}{context}[/INST]"
+INTRUCT_TEMPLATE = "[INST]{sys_inst}{context}\n\nСообщение пользователя:\n{message}[/INST]"
 
 TG_GREET_MESSAGE = """Привет! Я большая языковая модель, которая может генерировать текст. 
 В мое основе лежит большая языковыя модель Mistral-7B-Instruct-v0.2 (версия GPTQ). Я дообучена на датасете сервиса Yandex Q с использованием QLoRA.
@@ -100,7 +100,7 @@ def remove_stop_words(query: str) -> str:
 def knowlage_db_context(query: str) -> str:
     clear_query = remove_stop_words(query)
     search_response = vector_query_engine.query(clear_query)
-    if not search_response:
+    if not search_response.source_nodes:
         return 'В базе знаний ничего не найдено'
     context = ['Найдено в базе знаний:\n']
     for node in search_response.source_nodes:
@@ -129,12 +129,13 @@ def load_model():
 
 def generate_inital_prompt(user_query):
     return INTRUCT_TEMPLATE.format(
-        inst=SYSTEM_PROMPT,
-        context=knowlage_db_context(user_query))
+        sys_inst=SYSTEM_PROMPT,
+        context=knowlage_db_context(user_query),
+        message=user_query)
 
 def continue_dialog(history, user_query):
     return history + '\n' + INTRUCT_TEMPLATE.format(
-        inst='\n',
+        sys_inst='\n',
         context=knowlage_db_context(user_query)
     )
 
@@ -169,9 +170,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         logging.info(f'Model output: {model_output}')
         user_dialogs[chat_id] = model_output
         last_inst = model_output.rfind('[/INST]')
-        await context.bot.send_message(model_output[last_inst+7:])
+        await context.bot.send_message(chat_id, model_output[last_inst+7:])
     except Exception as e:
-        await context.bot.send_message('[!] Произошла ошибка, смотрите логи!')
+        await context.bot.send_message(chat_id, '[!] Произошла ошибка, смотрите логи!')
         logging.exception(f"cannot generate output, reason:\n")
 
 
