@@ -26,6 +26,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 MODEL_NAME = "TheBloke/Mistral-7B-Instruct-v0.2-GPTQ"
 MODEL_REVISION = "gptq-4bit-32g-actorder_True"
+EMBEDDING_MODEL = "cointegrated/LaBSE-en-ru"
 
 PRETRAINED_LORA = "ggeorge/qlora-mistral-hackatone-yandexq"
 
@@ -74,7 +75,14 @@ def read_telegram_token(file_path):
 
 
 def load_vector_storage(path_dir, top_k=3):
-    index = VectorStoreIndex.from_documents(documents)
+    global vector_query_engine
+
+    Settings.embed_model = HuggingFaceEmbedding(model_name=EMBEDDING_MODEL)
+    Settings.llm = None
+    Settings.chunk_size = 256
+    Settings.chunk_overlap = 12
+
+    index = VectorStoreIndex.from_documents(path_dir)
     retriever = VectorIndexRetriever(
         index=index,
         similarity_top_k=top_k,
@@ -161,17 +169,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await context.bot.send_message('[!] Произошла ошибка, смотрите логи!')
         logging.exception(f"cannot generate output, reason:\n")
 
-        
 
 
 def main():
+    global vector_storage_index, model, model_tokenizer
     token = read_telegram_token(TG_TOKEN_PATH)
     if not token:
         print('Telegram token is empty')
         sys.exit(-1)
 
     logging.info(f'indexing documents in the direcotry: {STORAGE}')
-    vector_storage_index = load_vector_storage(STORAGE)
+    vector_storage_index = load_vector_storage(STORAGE, top_k=3)
 
     logging.info(f'loading model: {MODEL_NAME} {MODEL_REVISION}')
     logging.info(f'qlora: {PRETRAINED_LORA}')
