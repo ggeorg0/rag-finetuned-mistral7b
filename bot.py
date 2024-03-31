@@ -82,7 +82,8 @@ def load_vector_storage(path_dir, top_k=3):
     Settings.chunk_size = 256
     Settings.chunk_overlap = 12
 
-    index = VectorStoreIndex.from_documents(path_dir)
+    documents = SimpleDirectoryReader(path_dir).load_data()
+    index = VectorStoreIndex.from_documents(documents)
     retriever = VectorIndexRetriever(
         index=index,
         similarity_top_k=top_k,
