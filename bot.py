@@ -196,7 +196,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             answer = model_output[last_inst+7:]
         else:
             answer = model_output[last_inst+7:sentence_end_token]
-        await context.bot.send_message(chat_id, model_output[last_inst+7:])
+        await context.bot.send_message(chat_id, answer)
     except Exception as e:
         await context.bot.send_message(chat_id, '[!] Произошла ошибка, смотрите логи!\n'
                                                 'Вероятно длина контекста достигла максимума')
