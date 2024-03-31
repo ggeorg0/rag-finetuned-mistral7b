@@ -35,7 +35,7 @@ TG_TOKEN_PATH = "telegram_token.txt"
 DEVICE = 'auto'
 
 # your documents directory
-STORAGE = "books"
+STORAGE = "documents"
 
 SYSTEM_PROMPT = "Вы - русскоязычный ИИ ассистент, который помогает пользователям находить файлы, \
 отвечать на их вопросы и поддерживать диалог. \
@@ -162,24 +162,30 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         logging.exception(f"cannot generate output, reason:\n")
 
         
-token = read_telegram_token(TG_TOKEN_PATH)
-if not token:
-    print('Telegram token is empty')
-    sys.exit(-1)
 
-logging.info(f'indexing documents in the direcotry: {STORAGE}')
-vector_storage_index = load_vector_storage(STORAGE)
 
-logging.info(f'loading model: {MODEL_NAME} {MODEL_REVISION}')
-logging.info(f'qlora: {PRETRAINED_LORA}')
-model, model_tokenizer = load_model()
+def main():
+    token = read_telegram_token(TG_TOKEN_PATH)
+    if not token:
+        print('Telegram token is empty')
+        sys.exit(-1)
 
-logging.info(f'building telegram bot')
-app = ApplicationBuilder().token(token).build()
+    logging.info(f'indexing documents in the direcotry: {STORAGE}')
+    vector_storage_index = load_vector_storage(STORAGE)
 
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("help", help_command))
+    logging.info(f'loading model: {MODEL_NAME} {MODEL_REVISION}')
+    logging.info(f'qlora: {PRETRAINED_LORA}')
+    model, model_tokenizer = load_model()
 
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    logging.info(f'building telegram bot')
+    app = ApplicationBuilder().token(token).build()
 
-app.run_polling()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("help", help_command))
+
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
