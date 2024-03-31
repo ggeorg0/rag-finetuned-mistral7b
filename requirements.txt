@@ -1,5 +1,7 @@
 python-telegram-bot
+torch
 bitsandbytes
+transformers
 llama-index
 llama-index-embeddings-huggingface
 peft

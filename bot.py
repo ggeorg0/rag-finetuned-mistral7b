@@ -108,7 +108,10 @@ def knowlage_db_context(query: str) -> str:
         context.append( f'\tдата создания: {node.metadata["creation_date"]}\n' )
         context.append( f'\tтекст: {node.text}' + "\n" )
 
-    return context.join('\n')
+    merged_context = '\n'.join(context)
+    logging.info(f"Model context: {merged_context}")
+    return merged_context
+
     
 def load_model():
     model = AutoModelForCausalLM.from_pretrained(
@@ -130,7 +133,7 @@ def generate_inital_prompt(user_query):
         context=knowlage_db_context(user_query))
 
 def continue_dialog(history, user_query):
-    return INTRUCT_TEMPLATE.format(
+    return history + '\n' + INTRUCT_TEMPLATE.format(
         inst='\n',
         context=knowlage_db_context(user_query)
     )
@@ -163,6 +166,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         prompt = generate_inital_prompt(new_text)
     try:
         model_output = query_model(prompt)
+        logging.info(f'Model output: {model_output}')
         user_dialogs[chat_id] = model_output
         last_inst = model_output.rfind('[/INST]')
         await context.bot.send_message(model_output[last_inst+7:])
@@ -194,6 +198,7 @@ def main():
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
+    logging.getLogger('httpx').setLevel(logging.WARNING)
     app.run_polling()
 
 if __name__ == "__main__":
