@@ -93,3 +93,6 @@ learning_rate: 5e-05
 train_batch_size: 8
 eval_batch_size: 8
 ```
+
+![image](https://github.com/ggeorg0/rag-finetuned-mistral7b/assets/89857543/3136afc1-1449-4f3c-bc5c-4f4ec9ffa4fb)
+
