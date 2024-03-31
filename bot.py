@@ -32,6 +32,8 @@ PRETRAINED_LORA = "ggeorge/qlora-mistral-hackatone-yandexq"
 
 TG_TOKEN_PATH = "telegram_token.txt"
 
+STOPWORDS_DIRECTORY = "stopwords"
+
 # device: 'auto' or 'gpu'
 DEVICE = 'auto'
 
@@ -55,14 +57,15 @@ TG_GREET_MESSAGE = """Привет! Я большая языковая моде�
 Просто отправь мне свое сообщение, и я отвечу.
 """
 
-DEFAULT_MAX_TOKENS = 180
+DEFAULT_MAX_TOKENS = 250
 
-### TODO
-model: None
+# type annotations can be inaccurate here
+model: PeftModel
 model_tokenizer: AutoTokenizer
 vector_storage_index: VectorStoreIndex
-vector_query_engine: None
+vector_query_engine: RetrieverQueryEngine
 user_dialogs: dict[int, str] = dict()
+stopwords: list[str]
 
 
 def read_telegram_token(file_path):
@@ -73,6 +76,14 @@ def read_telegram_token(file_path):
         token = input("File 'telegram_token.txt' not found. Enter token manually: ").strip()
     return token
 
+def load_stopwords(directory):
+    stop_words = []
+    for filename in os.listdir(directory):
+        filepath = os.path.join(directory, filename)
+        with open(filepath, 'r') as file:
+            lines = file.readlines()
+            stop_words.extend(lines)
+    return list(map(str.strip, stop_words))
 
 def load_vector_storage(path_dir, top_k=3):
     global vector_query_engine
@@ -94,8 +105,9 @@ def load_vector_storage(path_dir, top_k=3):
 )
     
 def remove_stop_words(query: str) -> str:
+    for sw in stopwords:
+        query = query.replace(sw, '')
     return query
-    # TODO!!!
 
 def knowlage_db_context(query: str) -> str:
     clear_query = remove_stop_words(query)
@@ -123,6 +135,7 @@ def load_model():
     config = PeftConfig.from_pretrained(PRETRAINED_LORA)
     model = PeftModel.from_pretrained(model, PRETRAINED_LORA)
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, use_fast=True)
+    tokenizer.pad_token = tokenizer.eos_token
 
     model.eval()
     return model, tokenizer
@@ -136,7 +149,8 @@ def generate_inital_prompt(user_query):
 def continue_dialog(history, user_query):
     return history + '\n' + INTRUCT_TEMPLATE.format(
         sys_inst='\n',
-        context=knowlage_db_context(user_query)
+        context=knowlage_db_context(user_query,
+        message=user_query)
     )
 
 def query_model(prompt) -> str:
@@ -176,13 +190,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         logging.exception(f"cannot generate output, reason:\n")
 
 
-
 def main():
-    global vector_storage_index, model, model_tokenizer
+    global vector_storage_index, model, model_tokenizer, stopwords
     token = read_telegram_token(TG_TOKEN_PATH)
     if not token:
         print('Telegram token is empty')
         sys.exit(-1)
+
+    stopwords = load_stopwords(STOPWORDS_DIRECTORY)
 
     logging.info(f'indexing documents in the direcotry: {STORAGE}')
     vector_storage_index = load_vector_storage(STORAGE, top_k=3)
